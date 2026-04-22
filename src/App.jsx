@@ -1,10 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createTheme, CssBaseline, ThemeProvider } from '@mui/material';
-import { AppBar, Avatar, Box, Chip, InputAdornment, TextField, Toolbar, Typography } from '@mui/material';
+import {
+  AppBar,
+  Avatar,
+  Box,
+  Chip,
+  ClickAwayListener,
+  InputAdornment,
+  List,
+  ListItemButton,
+  ListItemText,
+  TextField,
+  Toolbar,
+  Typography,
+} from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import SongGrid from './components/SongGrid';
 import VideoPlayer from './components/VideoPlayer';
-import Sidebar from './components/Sidebar';
 import NowPlaying from './components/NowPlaying';
 import { fetchSongs } from './services/api';
 import './App.css';
@@ -12,10 +24,15 @@ import './App.css';
 const theme = createTheme({
   palette: {
     mode: 'dark',
-    primary: { main: '#ff4455' },
+    primary: { main: '#ff3b4e' },
+    secondary: { main: '#5da9ff' },
     background: {
-      default: '#0f1115',
-      paper: '#151a22',
+      default: '#070809',
+      paper: '#11151c',
+    },
+    text: {
+      primary: '#f3f6fc',
+      secondary: '#a7b3c7',
     },
   },
   shape: {
@@ -29,7 +46,8 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedSong, setSelectedSong] = useState(null);
-  const [activeMenu, setActiveMenu] = useState('Home');
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   useEffect(() => {
     const loadSongs = async () => {
@@ -38,6 +56,7 @@ function App() {
         const data = await fetchSongs();
         setSongs(data);
         setSelectedSong(data[0] ?? null);
+        setIsPlaying(true);
       } catch {
         setError('Unable to load songs. Please refresh the page.');
       } finally {
@@ -61,86 +80,116 @@ function App() {
     });
   }, [songs, searchTerm]);
 
-  const viewSongs = useMemo(() => {
-    switch (activeMenu) {
-      case 'Library': {
-        const librarySongs = filteredSongs.filter((song) => {
-          const haystack = `${song.genre ?? ''} ${song.artist ?? ''}`.toLowerCase();
-          return haystack.includes('opm') || haystack.includes('eraserheads');
-        });
-        return librarySongs.length > 0 ? librarySongs : filteredSongs;
-      }
-      case 'Trending': {
-        return [...filteredSongs].sort((a, b) => Number(b.id) - Number(a.id));
-      }
-      case 'Playlists': {
-        const groupedByAlbum = [...filteredSongs].sort((a, b) => {
-          const albumA = (a.album ?? '').toLowerCase();
-          const albumB = (b.album ?? '').toLowerCase();
-          return albumA.localeCompare(albumB);
-        });
-        return groupedByAlbum;
-      }
-      case 'Explore':
-      case 'Home':
-      default:
-        return filteredSongs;
-    }
-  }, [activeMenu, filteredSongs]);
+  const viewSongs = filteredSongs;
 
-  const currentQueue = viewSongs.length > 0 ? viewSongs : songs;
+  const searchSuggestions = useMemo(() => {
+    const keyword = searchTerm.trim();
+    if (!keyword) return [];
+    return filteredSongs.slice(0, 6);
+  }, [filteredSongs, searchTerm]);
+
+  const playbackQueue = songs;
 
   const currentIndex = useMemo(() => {
     if (!selectedSong) return -1;
-    return currentQueue.findIndex((song) => song.id === selectedSong.id);
-  }, [currentQueue, selectedSong]);
+    return playbackQueue.findIndex((song) => song.id === selectedSong.id);
+  }, [playbackQueue, selectedSong]);
 
   const relatedSongs = useMemo(() => {
-    if (!selectedSong) return currentQueue.slice(0, 5);
-    return currentQueue.filter((song) => song.id !== selectedSong.id).slice(0, 8);
-  }, [currentQueue, selectedSong]);
+    if (!selectedSong) return playbackQueue.slice(0, 5);
+    return playbackQueue.filter((song) => song.id !== selectedSong.id).slice(0, 8);
+  }, [playbackQueue, selectedSong]);
 
   const handlePlaySong = (song) => {
     setSelectedSong(song);
+    setIsPlaying(true);
+  };
+
+  const handleSelectSuggestion = (song) => {
+    setSelectedSong(song);
+    setIsPlaying(true);
+    setSearchTerm(song.title);
+    setIsSearchOpen(false);
   };
 
   const handleNext = () => {
-    if (currentQueue.length === 0) return;
-    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % currentQueue.length : 0;
-    setSelectedSong(currentQueue[nextIndex]);
+    if (playbackQueue.length === 0) return;
+    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % playbackQueue.length : 0;
+    setSelectedSong(playbackQueue[nextIndex]);
+    setIsPlaying(true);
   };
 
   const handlePrevious = () => {
-    if (currentQueue.length === 0) return;
-    const prevIndex = currentIndex > 0 ? currentIndex - 1 : currentQueue.length - 1;
-    setSelectedSong(currentQueue[prevIndex]);
+    if (playbackQueue.length === 0) return;
+    const prevIndex = currentIndex > 0 ? currentIndex - 1 : playbackQueue.length - 1;
+    setSelectedSong(playbackQueue[prevIndex]);
+    setIsPlaying(true);
   };
 
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <div className="app-shell">
-        <Sidebar activeMenu={activeMenu} onSelectMenu={setActiveMenu} />
-
         <main className="content-shell">
           <AppBar position="sticky" elevation={0} color="transparent" className="topbar">
             <Toolbar className="flex items-center justify-between gap-3 p-0">
-              <TextField
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search songs, artists, channels"
-                size="small"
-                className="w-full max-w-xl"
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon fontSize="small" />
-                    </InputAdornment>
-                  ),
-                }}
-              />
+              <ClickAwayListener onClickAway={() => setIsSearchOpen(false)}>
+                <Box className="topbar-search-wrap w-full max-w-xl">
+                  <TextField
+                    value={searchTerm}
+                    onChange={(event) => {
+                      setSearchTerm(event.target.value);
+                      setIsSearchOpen(true);
+                    }}
+                    onFocus={() => {
+                      if (searchTerm.trim()) {
+                        setIsSearchOpen(true);
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') {
+                        setIsSearchOpen(false);
+                      }
+                      if (event.key === 'Enter' && searchSuggestions.length > 0) {
+                        handleSelectSuggestion(searchSuggestions[0]);
+                      }
+                    }}
+                    placeholder="Search songs, artists, channels"
+                    size="small"
+                    className="w-full"
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchIcon fontSize="small" />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+
+                  {isSearchOpen && searchSuggestions.length > 0 ? (
+                    <Box className="search-dropdown">
+                      <List className="search-results-list">
+                        {searchSuggestions.map((song) => (
+                          <ListItemButton
+                            key={song.id}
+                            className="search-result-item"
+                            onClick={() => handleSelectSuggestion(song)}
+                          >
+                            <ListItemText
+                              primary={song.title}
+                              secondary={`${song.artist} • ${song.album ?? 'Single'}`}
+                              primaryTypographyProps={{ className: 'search-result-primary' }}
+                              secondaryTypographyProps={{ className: 'search-result-secondary' }}
+                            />
+                          </ListItemButton>
+                        ))}
+                      </List>
+                    </Box>
+                  ) : null}
+                </Box>
+              </ClickAwayListener>
               <Box className="flex items-center gap-2">
-                <Chip label={activeMenu} color="primary" size="small" />
+                <Chip label="All songs" color="primary" size="small" />
                 <Chip label={`${filteredSongs.length} songs`} color="primary" variant="outlined" size="small" />
                 <Avatar sx={{ width: 32, height: 32 }}>S</Avatar>
               </Box>
@@ -153,6 +202,8 @@ function App() {
                 song={selectedSong}
                 loading={loading}
                 onNext={handleNext}
+                isPlaying={isPlaying}
+                onPlayStateChange={setIsPlaying}
               />
               {error ? <p className="error-text">{error}</p> : null}
             </div>
@@ -186,6 +237,8 @@ function App() {
             onClose={() => setSelectedSong(null)}
             onNext={handleNext}
             onPrevious={handlePrevious}
+            isPlaying={isPlaying}
+            onTogglePlayPause={() => setIsPlaying((prev) => !prev)}
           />
         ) : null}
       </div>

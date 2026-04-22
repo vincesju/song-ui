@@ -1,8 +1,6 @@
 import { Button, Paper, Typography } from '@mui/material';
-import { useState } from 'react';
 
-export default function NowPlaying({ song, onClose, onNext, onPrevious }) {
-  const [isPlaying, setIsPlaying] = useState(true);
+export default function NowPlaying({ song, onClose, onNext, onPrevious, isPlaying, onTogglePlayPause }) {
 
   return (
     <Paper elevation={8} square className="now-playing-shell">
@@ -20,7 +18,7 @@ export default function NowPlaying({ song, onClose, onNext, onPrevious }) {
         </Button>
         <Button
           type="button"
-          onClick={() => setIsPlaying((prev) => !prev)}
+          onClick={onTogglePlayPause}
           className="now-button now-button-main"
           size="small"
           variant="contained"
